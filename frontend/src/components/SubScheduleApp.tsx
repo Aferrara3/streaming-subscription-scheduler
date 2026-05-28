@@ -102,9 +102,15 @@ interface MessageState {
   text: string;
 }
 
+interface ShowGroup {
+  providerName: string;
+  windows: SubscriptionWindow[];
+  shows: ShowCard[];
+}
+
 function formatIsoDate(value: string | null): string {
   if (!value) {
-    return "No date available";
+    return "No date scheduled";
   }
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -130,6 +136,19 @@ function getInitials(value: string): string {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() || "")
     .join("") || "TV";
+}
+
+function sortShows(left: ShowCard, right: ShowCard): number {
+  if (left.next_episode_date && right.next_episode_date) {
+    return left.next_episode_date.localeCompare(right.next_episode_date);
+  }
+  if (left.next_episode_date) {
+    return -1;
+  }
+  if (right.next_episode_date) {
+    return 1;
+  }
+  return left.show_name.localeCompare(right.show_name);
 }
 
 async function apiRequest<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
@@ -172,6 +191,8 @@ export default function SubScheduleApp() {
   const [isDashboardBusy, setIsDashboardBusy] = useState(false);
   const [message, setMessage] = useState<MessageState | null>(null);
   const [overrideDrafts, setOverrideDrafts] = useState<Record<number, string>>({});
+  const [expandedShows, setExpandedShows] = useState<Record<number, boolean>>({});
+  const [selectedCalendarProvider, setSelectedCalendarProvider] = useState<string | null>(null);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -187,6 +208,8 @@ export default function SubScheduleApp() {
     setAccount(null);
     setDashboard({ shows: [], provider_windows: [], calendar_months: [] });
     setOverrideDrafts({});
+    setExpandedShows({});
+    setSelectedCalendarProvider(null);
   }, []);
 
   const loadDashboard = useCallback(
@@ -224,11 +247,70 @@ export default function SubScheduleApp() {
     return () => window.clearTimeout(timeoutId);
   }, [loadDashboard, token]);
 
+  const calendarProviderOptions = useMemo(() => {
+    const providers = new Set<string>();
+    for (const month of dashboard.calendar_months) {
+      for (const provider of month.providers) {
+        providers.add(provider);
+      }
+    }
+    return Array.from(providers).sort((left, right) => left.localeCompare(right));
+  }, [dashboard.calendar_months]);
+
+  const activeCalendarProvider = useMemo(() => {
+    if (!selectedCalendarProvider) {
+      return null;
+    }
+    return calendarProviderOptions.includes(selectedCalendarProvider) ? selectedCalendarProvider : null;
+  }, [calendarProviderOptions, selectedCalendarProvider]);
+
   const hasTrackedShows = dashboard.shows.length > 0;
   const upcomingEpisodeCount = useMemo(
     () => dashboard.shows.reduce((count, show) => count + show.episodes.length, 0),
     [dashboard.shows],
   );
+
+  const showGroups = useMemo<ShowGroup[]>(() => {
+    const providerWindowsByName = new Map(
+      dashboard.provider_windows.map((providerWindow) => [providerWindow.provider_name, providerWindow.windows]),
+    );
+    const groups = new Map<string, ShowCard[]>();
+
+    for (const show of dashboard.shows) {
+      const providerName = show.provider_name || "Unknown";
+      const currentShows = groups.get(providerName) || [];
+      currentShows.push(show);
+      groups.set(providerName, currentShows);
+    }
+
+    return Array.from(groups.entries())
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([providerName, shows]) => ({
+        providerName,
+        windows: providerWindowsByName.get(providerName) || [],
+        shows: [...shows].sort(sortShows),
+      }));
+  }, [dashboard.provider_windows, dashboard.shows]);
+
+  const filteredCalendarMonths = useMemo(() => {
+    if (!activeCalendarProvider) {
+      return dashboard.calendar_months;
+    }
+
+    return dashboard.calendar_months
+      .map((month) => {
+        const entries = month.entries.filter((entry) => entry.provider_name === activeCalendarProvider);
+        if (entries.length === 0) {
+          return null;
+        }
+        return {
+          ...month,
+          providers: [activeCalendarProvider],
+          entries,
+        };
+      })
+      .filter((month): month is CalendarMonth => month !== null);
+  }, [activeCalendarProvider, dashboard.calendar_months]);
 
   const handleAuthSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -249,7 +331,7 @@ export default function SubScheduleApp() {
       setPassword("");
       setMessage({
         kind: "success",
-        text: authMode === "register" ? "Account created. Start tracking shows." : "Signed in.",
+        text: authMode === "register" ? "Account ready." : "Welcome back.",
       });
       await loadDashboard(response.token);
     } catch (error) {
@@ -297,7 +379,7 @@ export default function SubScheduleApp() {
       return;
     }
     try {
-      await apiRequest<ShowCard>(
+      const addedShow = await apiRequest<ShowCard>(
         "/tracked-shows",
         {
           method: "POST",
@@ -305,6 +387,7 @@ export default function SubScheduleApp() {
         },
         token,
       );
+      setExpandedShows((current) => ({ ...current, [addedShow.tracked_show_id]: true }));
       setMessage({ kind: "success", text: "Show added to your schedule." });
       await loadDashboard(token);
     } catch (error) {
@@ -318,6 +401,11 @@ export default function SubScheduleApp() {
     }
     try {
       await apiRequest<void>(`/tracked-shows/${trackedShowId}`, { method: "DELETE" }, token);
+      setExpandedShows((current) => {
+        const next = { ...current };
+        delete next[trackedShowId];
+        return next;
+      });
       setMessage({ kind: "success", text: "Show removed." });
       await loadDashboard(token);
     } catch (error) {
@@ -359,6 +447,14 @@ export default function SubScheduleApp() {
     }
   };
 
+  const toggleShowExpanded = (trackedShowId: number) => {
+    setExpandedShows((current) => ({ ...current, [trackedShowId]: !current[trackedShowId] }));
+  };
+
+  const toggleCalendarProvider = (providerName: string) => {
+    setSelectedCalendarProvider((current) => (current === providerName ? null : providerName));
+  };
+
   const messageClassName =
     message == null
       ? ""
@@ -377,27 +473,36 @@ export default function SubScheduleApp() {
   return (
     <main className={styles.appShell}>
       <div className={styles.container}>
-        <section className={styles.hero}>
-          <div className={styles.heroTop}>
-            <div>
-              <div className={styles.eyebrow}>US-only streaming planner</div>
-              <h1>Track a few series. Pay for fewer subscriptions.</h1>
-            </div>
-            {account ? (
-              <div className={styles.topBarActions}>
-                <span className={styles.pill}>@{account.username}</span>
-                <button className={styles.ghostButton} onClick={handleLogout} type="button">
-                  Log out
-                </button>
+        {!account ? (
+          <section className={styles.hero}>
+            <div className={styles.heroTop}>
+              <div>
+                <div className={styles.eyebrow}>US release planning</div>
+                <h1>Track a few series. Pay for fewer subscriptions.</h1>
               </div>
-            ) : null}
-          </div>
-          <p>
-            Sub Schedule builds a month-by-month streaming plan for newly airing episodes. Search shows, follow the ones
-            you care about, and see when Max, Disney+, Prime Video, Paramount+, or other providers actually need to be
-            active.
-          </p>
-        </section>
+            </div>
+            <p>
+              Follow the shows you actually care about and see exactly when each streaming service needs to be active,
+              month by month.
+            </p>
+          </section>
+        ) : (
+          <section className={styles.dashboardHeader}>
+            <div className={styles.dashboardHeaderCopy}>
+              <div className={styles.eyebrow}>Dashboard</div>
+              <h1>Your release schedule</h1>
+            </div>
+            <div className={styles.topBarActions}>
+              <span className={styles.pill}>@{account.username}</span>
+              <button className={styles.ghostButton} disabled={isDashboardBusy} onClick={() => void loadDashboard(token)} type="button">
+                {isDashboardBusy ? "Refreshing..." : "Refresh"}
+              </button>
+              <button className={styles.ghostButton} onClick={handleLogout} type="button">
+                Log out
+              </button>
+            </div>
+          </section>
+        )}
 
         {message ? <div className={messageClassName}>{message.text}</div> : null}
 
@@ -405,22 +510,15 @@ export default function SubScheduleApp() {
           <section className={styles.authLayout}>
             <div className={styles.authIntro}>
               <div className={styles.panelHeader}>
-                <h2>What this MVP does</h2>
-                <p>Account-scoped tracking, provider-aware release planning, a show dashboard, and a calendar dashboard.</p>
-              </div>
-              <div className={styles.featureList}>
-                <div className={styles.featureItem}>
-                  <strong>Search and track shows</strong>
-                  <span>Pull series metadata, upcoming episodes, and the most likely US streaming home.</span>
-                </div>
-                <div className={styles.featureItem}>
-                  <strong>See subscription windows</strong>
-                  <span>Collapsed monthly windows make it obvious when each provider is actually needed.</span>
-                </div>
-                <div className={styles.featureItem}>
-                  <strong>Correct bad metadata</strong>
-                  <span>When a provider is fuzzy, override it manually without affecting other accounts.</span>
-                </div>
+                <h2>Only keep the services you need.</h2>
+                <p>
+                  Sub Schedule turns new episode release dates into a practical streaming plan, so you can rotate between
+                  services instead of paying for all of them at once.
+                </p>
+                <p>
+                  Search for a show, add it to your list, and get a cleaner answer to the question: which subscriptions
+                  actually matter this month?
+                </p>
               </div>
             </div>
 
@@ -474,41 +572,49 @@ export default function SubScheduleApp() {
           </section>
         ) : (
           <>
-            <section className={styles.summaryGrid}>
-              <article className={styles.summaryCard}>
-                <h3>Tracked shows</h3>
-                <div className={styles.summaryValue}>{dashboard.shows.length}</div>
-                <p>Series currently driving your subscription plan.</p>
+            <section className={styles.summaryStrip}>
+              <article className={styles.metricCard}>
+                <span className={styles.metricLabel}>Tracked</span>
+                <strong className={styles.metricValue}>{dashboard.shows.length}</strong>
               </article>
-              <article className={styles.summaryCard}>
-                <h3>Upcoming episodes</h3>
-                <div className={styles.summaryValue}>{upcomingEpisodeCount}</div>
-                <p>New releases inside the current planning horizon.</p>
+              <article className={styles.metricCard}>
+                <span className={styles.metricLabel}>Upcoming episodes</span>
+                <strong className={styles.metricValue}>{upcomingEpisodeCount}</strong>
               </article>
-              <article className={styles.summaryCard}>
-                <h3>Providers in play</h3>
-                <div className={styles.summaryValue}>{dashboard.provider_windows.length}</div>
-                <p>Unique services you likely need to rotate through.</p>
+              <article className={styles.metricCard}>
+                <span className={styles.metricLabel}>Services</span>
+                <strong className={styles.metricValue}>{dashboard.provider_windows.length}</strong>
               </article>
             </section>
 
             <section className={styles.grid}>
               <aside className={styles.panel}>
-                <div className={styles.panelHeader}>
-                  <h2>Add a show</h2>
-                  <p>Search by series title. Results are normalized against external metadata before they enter your plan.</p>
+                <div className={styles.addShowHeader}>
+                  <div className={styles.panelHeader}>
+                    <h2>Add a show</h2>
+                    <p>Search for a series and add it to your plan.</p>
+                  </div>
+                  <span className={styles.addShowHint}>Series search</span>
                 </div>
 
-                <form className={styles.searchBar} onSubmit={handleSearch}>
-                  <input
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Severance, Andor, The Last of Us..."
-                    value={searchQuery}
-                  />
-                  <button className={styles.primaryButton} disabled={isSearchBusy} type="submit">
-                    {isSearchBusy ? "Searching..." : "Search"}
-                  </button>
-                </form>
+                <div className={styles.searchPanel}>
+                  <form className={styles.searchBar} onSubmit={handleSearch}>
+                    <input
+                      className={styles.searchInput}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Severance, Andor, The Last of Us..."
+                      value={searchQuery}
+                    />
+                    <button className={styles.searchButton} disabled={isSearchBusy} type="submit">
+                      {isSearchBusy ? "Searching..." : "Search"}
+                    </button>
+                  </form>
+                </div>
+
+                <div className={styles.panelHeader}>
+                  <h2>Add a show</h2>
+                  <p>Results</p>
+                </div>
 
                 <div className={styles.stack}>
                   {searchResults.length === 0 ? (
@@ -533,7 +639,7 @@ export default function SubScheduleApp() {
                           </button>
                         </div>
                         <p className={styles.muted}>{result.summary || "No description available."}</p>
-                        <div className={styles.tagRow}>
+                        <div className={styles.inlineChips}>
                           <span className={`${styles.chip} ${styles.chipStrong}`}>{result.provider_name || "Needs review"}</span>
                           {result.imdb_id ? <span className={styles.chip}>IMDb {result.imdb_id}</span> : null}
                         </div>
@@ -546,12 +652,8 @@ export default function SubScheduleApp() {
               <section className={styles.viewSection}>
                 <div className={styles.topBar}>
                   <div className={styles.panelHeader}>
-                    <h2>Your streaming plan</h2>
-                    <p>
-                      {hasTrackedShows
-                        ? "Switch between the show dashboard and the calendar rollout."
-                        : "Track your first show to generate a subscription plan."}
-                    </p>
+                    <h2>Streaming plan</h2>
+                    <p>{hasTrackedShows ? "Review by show or by month." : "Track a show to populate your schedule."}</p>
                   </div>
 
                   <div className={styles.topBarActions}>
@@ -571,16 +673,13 @@ export default function SubScheduleApp() {
                         Calendar view
                       </button>
                     </div>
-                    <button className={styles.ghostButton} disabled={isDashboardBusy} onClick={() => void loadDashboard(token)} type="button">
-                      {isDashboardBusy ? "Refreshing..." : "Refresh dashboard"}
-                    </button>
                   </div>
                 </div>
 
                 <article className={styles.panel}>
                   <div className={styles.panelHeader}>
                     <h2>Provider windows</h2>
-                    <p>These are the collapsed monthly windows when each streaming service needs to be active.</p>
+                    <p>Keep these services active only during the months that matter.</p>
                   </div>
                   <div className={styles.providerWindowList}>
                     {dashboard.provider_windows.length === 0 ? (
@@ -592,7 +691,7 @@ export default function SubScheduleApp() {
                             <strong>{providerWindow.provider_name}</strong>
                             <span className={styles.smallText}>{providerWindow.show_count} tracked show(s)</span>
                           </div>
-                          <div className={styles.tagRow}>
+                          <div className={styles.inlineChips}>
                             {providerWindow.windows.map((window) => (
                               <span className={styles.chip} key={`${providerWindow.provider_name}-${window.start_month}`}>
                                 {window.label}
@@ -606,109 +705,164 @@ export default function SubScheduleApp() {
                 </article>
 
                 {viewMode === "shows" ? (
-                  <div className={styles.showList}>
-                    {dashboard.shows.length === 0 ? (
+                  <div className={styles.providerSectionList}>
+                    {showGroups.length === 0 ? (
                       <div className={styles.emptyState}>No tracked shows yet. Search for one on the left.</div>
                     ) : (
-                      dashboard.shows.map((show) => (
-                        <article className={styles.showCard} key={show.tracked_show_id}>
-                          <div className={styles.showCardHeader}>
-                            <div className={styles.showTitleRow}>
-                              <div className={styles.poster}>
-                                {show.image_url ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img alt={show.show_name} src={show.image_url} />
-                                ) : (
-                                  <div className={styles.posterFallback}>{getInitials(show.show_name)}</div>
-                                )}
-                              </div>
-                              <div className={styles.showMeta}>
-                                <div className={styles.metaRow}>
-                                  <h3>{show.show_name}</h3>
-                                  <span className={`${styles.chip} ${styles.chipStrong}`}>{show.provider_name}</span>
-                                  {show.status ? <span className={styles.chip}>{show.status}</span> : null}
-                                </div>
-                                <p>{show.summary || "No description available."}</p>
-                                <div className={styles.tagRow}>
-                                  {show.subscription_windows.length > 0 ? (
-                                    show.subscription_windows.map((window) => (
-                                      <span className={styles.chip} key={`${show.tracked_show_id}-${window.start_month}`}>
-                                        {window.label}
-                                      </span>
-                                    ))
-                                  ) : (
-                                    <span className={styles.chip}>No upcoming episodes in horizon</span>
-                                  )}
-                                </div>
-                                <span className={styles.smallText}>
-                                  {show.next_episode_date ? `Next episode ${formatIsoDate(show.next_episode_date)}` : "No upcoming episode currently cached"} ·{" "}
-                                  Metadata refreshed {formatDateTime(show.metadata_refreshed_at)}
-                                </span>
-                              </div>
+                      showGroups.map((group) => (
+                        <section className={styles.providerSection} key={group.providerName}>
+                          <div className={styles.providerSectionHeader}>
+                            <div>
+                              <h3>{group.providerName}</h3>
+                              <p>{group.shows.length} tracked show(s)</p>
                             </div>
-
-                            <div className={styles.showCardActions}>
-                              <button className={styles.ghostButton} onClick={() => handleRefreshShow(show.tracked_show_id)} type="button">
-                                Refresh metadata
-                              </button>
-                              <button className={styles.dangerButton} onClick={() => handleDeleteShow(show.tracked_show_id)} type="button">
-                                Remove
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className={styles.episodeList}>
-                            {show.episodes.length === 0 ? (
-                              <div className={styles.emptyState}>No upcoming episodes are cached for this show yet.</div>
-                            ) : (
-                              show.episodes.map((episode) => (
-                                <div className={styles.episodeItem} key={`${show.tracked_show_id}-${episode.airdate}-${episode.label}`}>
-                                  <strong>
-                                    {episode.formatted_airdate} · {episode.label}
-                                  </strong>
-                                  <span className={styles.smallText}>
-                                    {show.provider_name} · {show.provider_confidence} confidence · source {show.provider_source}
+                            <div className={styles.inlineChips}>
+                              {group.windows.length > 0 ? (
+                                group.windows.map((window) => (
+                                  <span className={styles.chip} key={`${group.providerName}-${window.start_month}`}>
+                                    {window.label}
                                   </span>
-                                </div>
-                              ))
-                            )}
+                                ))
+                              ) : (
+                                <span className={styles.chip}>No active window yet</span>
+                              )}
+                            </div>
                           </div>
 
-                          <div className={styles.overrideRow}>
-                            <input
-                              onChange={(event) =>
-                                setOverrideDrafts((current) => ({ ...current, [show.tracked_show_id]: event.target.value }))
-                              }
-                              placeholder="Optional provider override for ambiguous metadata"
-                              value={overrideDrafts[show.tracked_show_id] ?? ""}
-                            />
-                            <button className={styles.secondaryButton} onClick={() => handleSaveOverride(show.tracked_show_id)} type="button">
-                              Save provider
-                            </button>
-                            {show.source_url ? (
-                              <a className={styles.ghostButton} href={show.source_url} rel="noreferrer" target="_blank">
-                                Source
-                              </a>
-                            ) : null}
+                          <div className={styles.accordionList}>
+                            {group.shows.map((show) => {
+                              const expanded = expandedShows[show.tracked_show_id] ?? false;
+                              return (
+                                <article className={styles.accordionCard} key={show.tracked_show_id}>
+                                  <button
+                                    className={styles.accordionButton}
+                                    onClick={() => toggleShowExpanded(show.tracked_show_id)}
+                                    type="button"
+                                  >
+                                    <div className={styles.posterCompact}>
+                                      {show.image_url ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img alt={show.show_name} src={show.image_url} />
+                                      ) : (
+                                        <div className={styles.posterFallback}>{getInitials(show.show_name)}</div>
+                                      )}
+                                    </div>
+                                    <div className={styles.accordionPrimary}>
+                                      <strong>{show.show_name}</strong>
+                                      <span className={styles.smallText}>
+                                        {show.next_episode_date
+                                          ? `Next episode ${formatIsoDate(show.next_episode_date)}`
+                                          : "No upcoming episode in the current horizon"}
+                                      </span>
+                                    </div>
+                                    <div className={styles.accordionMeta}>
+                                      <span className={styles.accordionWindow}>
+                                        {show.subscription_windows[0]?.label || "No active window"}
+                                      </span>
+                                      <span className={styles.smallText}>{show.episodes.length} episode(s)</span>
+                                    </div>
+                                  </button>
+
+                                  {expanded ? (
+                                    <div className={styles.accordionPanel}>
+                                      {show.summary ? <p className={styles.muted}>{show.summary}</p> : null}
+
+                                      <div className={styles.inlineChips}>
+                                        {show.status ? <span className={styles.chip}>{show.status}</span> : null}
+                                        <span className={styles.chip}>{show.provider_confidence} confidence</span>
+                                        <span className={styles.chip}>Updated {formatDateTime(show.metadata_refreshed_at)}</span>
+                                      </div>
+
+                                      <div className={styles.episodeList}>
+                                        {show.episodes.length === 0 ? (
+                                          <div className={styles.emptyState}>No upcoming episodes are cached for this show yet.</div>
+                                        ) : (
+                                          show.episodes.map((episode) => (
+                                            <div className={styles.episodeItem} key={`${show.tracked_show_id}-${episode.airdate}-${episode.label}`}>
+                                              <strong>
+                                                {episode.formatted_airdate} · {episode.label}
+                                              </strong>
+                                              <span className={styles.smallText}>Source {show.provider_source}</span>
+                                            </div>
+                                          ))
+                                        )}
+                                      </div>
+
+                                      <div className={styles.overrideRow}>
+                                        <input
+                                          onChange={(event) =>
+                                            setOverrideDrafts((current) => ({ ...current, [show.tracked_show_id]: event.target.value }))
+                                          }
+                                          placeholder="Optional provider override"
+                                          value={overrideDrafts[show.tracked_show_id] ?? ""}
+                                        />
+                                        <button className={styles.secondaryButton} onClick={() => handleSaveOverride(show.tracked_show_id)} type="button">
+                                          Save provider
+                                        </button>
+                                        <button className={styles.ghostButton} onClick={() => handleRefreshShow(show.tracked_show_id)} type="button">
+                                          Refresh
+                                        </button>
+                                        <button className={styles.dangerButton} onClick={() => handleDeleteShow(show.tracked_show_id)} type="button">
+                                          Remove
+                                        </button>
+                                        {show.source_url ? (
+                                          <a className={styles.ghostButton} href={show.source_url} rel="noreferrer" target="_blank">
+                                            Source
+                                          </a>
+                                        ) : null}
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </article>
+                              );
+                            })}
                           </div>
-                        </article>
+                        </section>
                       ))
                     )}
                   </div>
                 ) : (
                   <div className={styles.showList}>
-                    {dashboard.calendar_months.length === 0 ? (
-                      <div className={styles.emptyState}>No calendar entries yet.</div>
+                    <article className={styles.panel}>
+                      <div className={styles.panelHeader}>
+                        <h2>Filter by service</h2>
+                        <p>Click a provider chip to narrow the calendar.</p>
+                      </div>
+                      <div className={styles.inlineChips}>
+                        {calendarProviderOptions.length === 0 ? (
+                          <span className={styles.chip}>No providers yet</span>
+                        ) : (
+                          calendarProviderOptions.map((provider) => (
+                            <button
+                              className={`${styles.chipButton} ${activeCalendarProvider === provider ? styles.activeChip : ""}`}
+                              key={provider}
+                              onClick={() => toggleCalendarProvider(provider)}
+                              type="button"
+                            >
+                              {provider}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </article>
+
+                    {filteredCalendarMonths.length === 0 ? (
+                      <div className={styles.emptyState}>No calendar entries match the current filter.</div>
                     ) : (
-                      dashboard.calendar_months.map((month) => (
+                      filteredCalendarMonths.map((month) => (
                         <article className={styles.monthCard} key={month.month}>
                           <div className={styles.calendarHeader}>
                             <h3>{month.label}</h3>
-                            <div className={styles.tagRow}>
+                            <div className={styles.inlineChips}>
                               {month.providers.map((provider) => (
-                                <span className={`${styles.chip} ${styles.chipStrong}`} key={`${month.month}-${provider}`}>
+                                <button
+                                  className={`${styles.chipButton} ${activeCalendarProvider === provider ? styles.activeChip : ""}`}
+                                  key={`${month.month}-${provider}`}
+                                  onClick={() => toggleCalendarProvider(provider)}
+                                  type="button"
+                                >
                                   {provider}
-                                </span>
+                                </button>
                               ))}
                             </div>
                           </div>
