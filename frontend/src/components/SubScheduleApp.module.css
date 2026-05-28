@@ -1,0 +1,515 @@
+.appShell {
+  width: 100%;
+  min-height: 100vh;
+  padding: 48px 24px 80px;
+}
+
+.container {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+  display: grid;
+  gap: 24px;
+}
+
+.hero {
+  display: grid;
+  gap: 20px;
+  padding: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top right, rgba(123, 92, 255, 0.18), transparent 32%),
+    linear-gradient(180deg, rgba(19, 21, 37, 0.98), rgba(11, 12, 22, 0.96));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.36);
+}
+
+.heroTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  font-size: clamp(2.4rem, 6vw, 4.6rem);
+  line-height: 0.95;
+  letter-spacing: -0.06em;
+  max-width: 9ch;
+}
+
+.hero p {
+  max-width: 72ch;
+  color: rgba(226, 230, 255, 0.72);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.authCard,
+.panel,
+.monthCard,
+.showCard,
+.summaryCard {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  background: rgba(12, 14, 24, 0.88);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
+}
+
+.authLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 420px);
+  gap: 24px;
+}
+
+.authIntro {
+  display: grid;
+  gap: 16px;
+  padding: 28px;
+}
+
+.featureList {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.featureItem {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.featureItem strong {
+  font-size: 0.98rem;
+}
+
+.featureItem span {
+  color: rgba(226, 230, 255, 0.7);
+  font-size: 0.95rem;
+}
+
+.authCard {
+  display: grid;
+  gap: 20px;
+  padding: 28px;
+}
+
+.authToggle {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  width: fit-content;
+}
+
+.authToggle button,
+.viewToggle button {
+  border: 0;
+  background: transparent;
+  color: rgba(228, 233, 255, 0.72);
+  padding: 10px 16px;
+  border-radius: 999px;
+  font: inherit;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.authToggle .activeToggle,
+.viewToggle .activeToggle {
+  background: rgba(135, 108, 255, 0.22);
+  color: #f8f9ff;
+}
+
+.form {
+  display: grid;
+  gap: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.field label {
+  font-size: 0.92rem;
+  color: rgba(223, 228, 255, 0.8);
+}
+
+.field input,
+.searchBar input,
+.overrideRow input {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f7f8ff;
+  font: inherit;
+  outline: none;
+}
+
+.field input:focus,
+.searchBar input:focus,
+.overrideRow input:focus {
+  border-color: rgba(135, 108, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(135, 108, 255, 0.12);
+}
+
+.primaryButton,
+.secondaryButton,
+.ghostButton,
+.dangerButton,
+.chip {
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+}
+
+.primaryButton,
+.secondaryButton,
+.ghostButton,
+.dangerButton {
+  cursor: pointer;
+  transition: transform 160ms ease, opacity 160ms ease, background 160ms ease;
+}
+
+.primaryButton:hover,
+.secondaryButton:hover,
+.ghostButton:hover,
+.dangerButton:hover {
+  transform: translateY(-1px);
+}
+
+.primaryButton {
+  padding: 14px 18px;
+  background: linear-gradient(135deg, #8e7cff, #5fd4ff);
+  color: #090b13;
+  font-weight: 700;
+}
+
+.secondaryButton {
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f7f8ff;
+}
+
+.ghostButton {
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(235, 239, 255, 0.84);
+}
+
+.dangerButton {
+  padding: 10px 14px;
+  background: rgba(255, 113, 113, 0.12);
+  color: #ffb1b1;
+}
+
+.statusBanner {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(95, 212, 255, 0.08);
+  color: rgba(226, 245, 255, 0.9);
+}
+
+.statusBannerError {
+  background: rgba(255, 113, 113, 0.12);
+  color: #ffc6c6;
+}
+
+.statusBannerSuccess {
+  background: rgba(98, 255, 167, 0.1);
+  color: #bffff2;
+}
+
+.topBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.topBarActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(227, 231, 255, 0.84);
+  font-size: 0.92rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.panel {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+}
+
+.panelHeader {
+  display: grid;
+  gap: 6px;
+}
+
+.panelHeader h2,
+.showCardHeader h3,
+.monthCard h3,
+.summaryCard h3 {
+  font-size: 1.15rem;
+}
+
+.panelHeader p,
+.showMeta p,
+.monthCard p,
+.muted {
+  color: rgba(225, 230, 255, 0.66);
+  line-height: 1.6;
+}
+
+.searchBar {
+  display: grid;
+  gap: 12px;
+}
+
+.stack {
+  display: grid;
+  gap: 12px;
+}
+
+.searchResult,
+.providerWindowCard {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.searchResultHeader,
+.showCardHeader,
+.showCardActions,
+.metaRow,
+.windowRow,
+.overrideRow,
+.calendarHeader {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.searchResultHeader {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.searchResultTitle {
+  display: grid;
+  gap: 4px;
+}
+
+.tagRow,
+.episodeList,
+.providerWindowList,
+.monthEntries {
+  display: grid;
+  gap: 10px;
+}
+
+.tagRow {
+  grid-template-columns: repeat(auto-fit, minmax(110px, max-content));
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(242, 245, 255, 0.88);
+}
+
+.chipStrong {
+  background: rgba(135, 108, 255, 0.2);
+}
+
+.viewSection {
+  display: grid;
+  gap: 18px;
+}
+
+.viewToggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  width: fit-content;
+}
+
+.showList {
+  display: grid;
+  gap: 18px;
+}
+
+.showCard {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+}
+
+.showCardHeader {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.showMeta {
+  display: grid;
+  gap: 10px;
+}
+
+.showTitleRow {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.poster {
+  width: 84px;
+  height: 118px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(95, 212, 255, 0.2), rgba(142, 124, 255, 0.12));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.posterFallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 700;
+  font-size: 1.35rem;
+}
+
+.episodeItem,
+.monthEntry {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.episodeItem strong,
+.monthEntry strong {
+  font-weight: 600;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.summaryCard {
+  padding: 20px;
+  display: grid;
+  gap: 14px;
+}
+
+.summaryValue {
+  font-size: 2rem;
+  line-height: 1;
+  letter-spacing: -0.06em;
+}
+
+.monthCard {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.emptyState {
+  padding: 22px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(228, 232, 255, 0.72);
+}
+
+.smallText {
+  color: rgba(228, 232, 255, 0.58);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 1080px) {
+  .grid,
+  .authLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .summaryGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .appShell {
+    padding: 24px 14px 48px;
+  }
+
+  .hero,
+  .authCard,
+  .panel,
+  .showCard,
+  .monthCard,
+  .summaryCard,
+  .authIntro {
+    padding: 20px;
+  }
+
+  .showTitleRow {
+    align-items: flex-start;
+  }
+}
+
