@@ -612,7 +612,6 @@ export default function SubScheduleApp() {
                 </div>
 
                 <div className={styles.panelHeader}>
-                  <h2>Add a show</h2>
                   <p>Results</p>
                 </div>
 
